@@ -1,31 +1,46 @@
-from flask import Flask, request, render_template
-from scapy.all import sniff
+from flask import Flask, render_template, request, jsonify
+from scapy.all import sniff, IP, TCP, UDP
 
 app = Flask(__name__)
+
+captured_packets = []
+
 def packet_callback(packet):
-    return {
-        'summary': packet.summary(),
-        'src': packet.src if hasattr(packet, 'src') else None,
-        'dst': packet.dst if hasattr(packet, 'dst') else None,
-        'proto': packet.proto if hasattr(packet, 'proto') else None,
-        'payload': str(packet.payload)
-    }
-@app.route('/', methods=['GET'])
+    """Callback function to process captured packets"""
+    if IP in packet:
+        packet_info = {
+            "summary": packet.summary(),
+            "src": packet[IP].src,
+            "dst": packet[IP].dst,
+            "proto": "TCP" if TCP in packet else "UDP" if UDP in packet else "Other",
+            "payload": str(packet.payload)
+        }
+        captured_packets.append(packet_info)
+
+@app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template("index.html", packets=[])
+
 @app.route('/capture', methods=['POST'])
 def capture_packets():
-    ip_address = request.form.get('ip_address')
-    packet_type = request.form.get('packet_type')
-    count = int(request.form.get('count', 10))
+    global captured_packets
+    captured_packets = []  # Reset packet storage
 
-    filter_str = ''
-    if packet_type:
-        filter_str += packet_type.lower()
+    ip_address = request.json.get("ip_address")
+    packet_type = request.json.get("packet_type").upper()
+    count = int(request.json.get("count"))
+
+    # Packet filter logic
+    filter_str = ""
     if ip_address:
-        filter_str += f' and host {ip_address}'
-    captured_packets = sniff(filter=filter_str, count=count)
-    packet_list = [packet_callback(pkt) for pkt in captured_packets]
-    return render_template('index.html', packets=packet_list)
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+        filter_str += f"host {ip_address} "
+    if packet_type in ["TCP", "UDP"]:
+        filter_str += f"and {packet_type.lower()}"
+
+    # Start capturing packets
+    sniff(filter=filter_str.strip(), prn=packet_callback, count=count, store=False)
+
+    return jsonify({"status": "success", "packets": captured_packets})
+
+if __name__ == "__main__":
+    app.run(debug=True)

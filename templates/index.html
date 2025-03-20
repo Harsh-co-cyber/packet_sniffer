@@ -65,7 +65,7 @@
     <div class="container">
         <h2>Packet Sniffer</h2>
         <!-- Form to capture packets -->
-        <form action="/capture" method="POST">
+        <form id="snifferForm">
             <div class="input-field">
                 <label for="ip_address">IP Address</label>
                 <input type="text" id="ip_address" name="ip_address" placeholder="Enter IP Address">
@@ -85,20 +85,48 @@
 
         <!-- Display captured packet information -->
         <div id="output">
-            {% if packets %}
-                {% for packet in packets %}
-                    <div>
-                        <strong>Summary:</strong> {{ packet.summary }}<br>
-                        <strong>Source:</strong> {{ packet.src }}<br>
-                        <strong>Destination:</strong> {{ packet.dst }}<br>
-                        <strong>Protocol:</strong> {{ packet.proto }}<br>
-                        <strong>Payload:</strong> {{ packet.payload }}<br><br>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <p>No packets captured yet.</p>
-            {% endif %}
+            <p>No packets captured yet.</p>
         </div>
     </div>
+
+    <script>
+        document.getElementById("snifferForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            let ipAddress = document.getElementById("ip_address").value;
+            let packetType = document.getElementById("packet_type").value;
+            let count = document.getElementById("count").value;
+
+            fetch("/capture", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ ip_address: ipAddress, packet_type: packetType, count: count })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let outputDiv = document.getElementById("output");
+                outputDiv.innerHTML = "";
+
+                if (data.packets.length > 0) {
+                    data.packets.forEach(packet => {
+                        let packetDiv = document.createElement("div");
+                        packetDiv.innerHTML = `
+                            <strong>Summary:</strong> ${packet.summary}<br>
+                            <strong>Source:</strong> ${packet.src}<br>
+                            <strong>Destination:</strong> ${packet.dst}<br>
+                            <strong>Protocol:</strong> ${packet.proto}<br>
+                            <strong>Payload:</strong> ${packet.payload}<br><br>
+                        `;
+                        outputDiv.appendChild(packetDiv);
+                    });
+                } else {
+                    outputDiv.innerHTML = "<p>No packets captured.</p>";
+                }
+            })
+            .catch(error => console.error("Error:", error));
+        });
+    </script>
 </body>
 </html>
